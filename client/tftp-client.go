@@ -1,16 +1,15 @@
 package main
 
 import (
-	"runtime"
-	"os"
 	"fmt"
-	"time"
-	"log"
 	"github.com/pin/tftp"
+	"log"
+	"os"
+	"runtime"
+	"time"
 )
 
-
-var Version string;
+var Version string
 
 func main() {
 
@@ -21,17 +20,16 @@ func main() {
 		log.Fatal("tftpx, incorrect number of arguments.\nUsage: " + os.Args[0] + " [ip]:port file_local_path file_remote_path")
 	}
 
-
 	path := os.Args[2]
-	c, err := tftp.NewClient( os.Args[1] )
+	c, err := tftp.NewClient(os.Args[1])
 
-	if  err != nil {
+	if err != nil {
 		log.Fatal("Connection error: ", err)
 	}
 
 	file, err := os.Open(path)
 
-	if  err != nil {
+	if err != nil {
 		log.Fatal("Open error: ", err)
 	}
 
@@ -40,13 +38,13 @@ func main() {
 	c.SetRetries(3)
 	rf, err := c.Send(os.Args[3], "octet")
 
-	if  err != nil {
+	if err != nil {
 		log.Fatal("Send error: ", err)
 	}
 
 	n, err := rf.ReadFrom(file)
 
-	if  err != nil {
+	if err != nil {
 		log.Fatal("Read error: ", err)
 	}
 

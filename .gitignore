@@ -1,0 +1,7 @@
+*.exe
+*.tsv
+tftp-server
+tftp-client
+src/
+pkg/
+data/*

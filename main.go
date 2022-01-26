@@ -74,93 +74,112 @@ func createPath(filename string) string {
 func readHandler(filename string, rf io.ReaderFrom) error {
 
 	fullfilename := createPath(filename)
-	fmt.Printf("Query for %s\n", filename)
-	fmt.Printf("Read from %s\n", fullfilename)
+	log.Printf("Query for %s\n", filename)
+	log.Printf("Read from %s\n", fullfilename)
 
 	file, err := os.Open(fullfilename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
-		fmt.Printf("Open error %v\n", err)
+		log.Printf("Open error %v\n", err)
 		return err
 	}
 	n, err := rf.ReadFrom(file)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
-		fmt.Printf("Read error %v\n", err)
+		log.Printf("Read error %v\n", err)
 		return err
 	}
-	fmt.Printf("%d bytes sent\n", n)
+	log.Printf("%d bytes sent\n", n)
 	return nil
 }
 
-func getIP(buf bytes.Buffer) (ip string, err error) {
+func getIP(buf bytes.Buffer) (ip, mask string, err error) {
 
 	list := strings.Fields(buf.String())
 	if len(list) <= 0 {
-		return "", fmt.Errorf("Incorrect format")
+		return "", "", fmt.Errorf("Incorrect format")
 	}
 
 	if list[0] != "IP:" {
-		return "", fmt.Errorf("IP not found")
+		return "", "", fmt.Errorf("IP not found")
 	}
 
-	return list[1], nil
+	if list[2] != "NETMASK:" {
+		return "", "", fmt.Errorf("MASK not found")
+	}
+
+	return list[1], list[3], nil
 }
 
-func changeIP(ip string) error {
+func changeIP(ip, mask string) error {
 
-	log.Printf("Change IP in progress, new ip: %s", ip)
-	var buf bytes.Buffer
-	//ifconfig eth0 1.2.3.4
-	cmd := exec.Command("ifconfig", "eth0", ip)
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
+	log.Printf("Trying to change IP/MASK to %s/%s", ip, mask)
 
-	err := cmd.Run()
+	_, err := exec.LookPath("ifconfig")
 	if err != nil {
+		log.Printf("%v", err)
 		return err
 	}
 
-	log.Printf("Successfully: %s", buf.String())
+	delay, _ := time.ParseDuration("10ms")
+
+	//delayed run, we can't start exec command immediately because in this case client didn't get answer
+	time.AfterFunc(delay, func() {
+
+		var buf bytes.Buffer
+		//ifconfig eth0 1.2.3.4
+		cmd := exec.Command("ifconfig", "eth0", ip, "netmask", mask)
+		cmd.Stdout = &buf
+		cmd.Stderr = &buf
+
+		err := cmd.Run()
+		if err != nil {
+			log.Printf("Unsuccessfully! IP not changed")
+			return
+		}
+
+		log.Printf("Successfully: %s", buf.String())
+	})
+
 	return nil
 }
 
 func proceedCommand(cmd string, buf bytes.Buffer) error {
 
-	fmt.Printf("Proceed command %s, with data: %v\n", cmd, buf)
+	log.Printf("Proceed command %s, with data: %v\n", cmd, buf)
 
 	switch cmd {
 
 	case cmdStop:
-		fmt.Printf("Command 'STOP' found\n")
+		log.Printf("Command 'STOP' found\n")
 	case cmdIP:
-		fmt.Printf("Command 'IP CHANGE' found\n")
-		ip, err := getIP(buf)
+		log.Printf("Command 'IP CHANGE' found\n")
+		ip, mask, err := getIP(buf)
 
 		if err != nil {
 			return err
 		}
 
-		return changeIP(ip)
+		return changeIP(ip, mask)
 
 	case cmdBOOT:
-		fmt.Printf("Command 'BOOT' found\n")
+		log.Printf("Command 'BOOT' found\n")
 	case cmdBrand:
-		fmt.Printf("Command 'BRAND' found\n")
+		log.Printf("Command 'BRAND' found\n")
 	case cmdFilenames:
-		fmt.Printf("Command 'FILE NAMES' found\n")
+		log.Printf("Command 'FILE NAMES' found\n")
 	case cmdArtnetMode:
-		fmt.Printf("Command 'ARTNET MODE' found\n")
+		log.Printf("Command 'ARTNET MODE' found\n")
 	case cmdRGBMode:
-		fmt.Printf("Command 'RGB MODE' found\n")
+		log.Printf("Command 'RGB MODE' found\n")
 	case cmdCrop:
-		fmt.Printf("Command 'CROP' found\n")
+		log.Printf("Command 'CROP' found\n")
 	case cmdMAC:
-		fmt.Printf("Command 'MAC' found\n")
+		log.Printf("Command 'MAC' found\n")
 	case cmdReboot:
-		fmt.Printf("Command 'REBOOT' found\n")
+		log.Printf("Command 'REBOOT' found\n")
 	case cmdTest:
-		fmt.Printf("Command 'TEST' found\n")
+		log.Printf("Command 'TEST' found\n")
 	default:
 		return fmt.Errorf("Unregistered command '%s'", cmd)
 	}
@@ -172,20 +191,20 @@ func proceedCommand(cmd string, buf bytes.Buffer) error {
 func writeHandler(filename string, wt io.WriterTo) error {
 
 	fullfilename := createPath(filename)
-	fmt.Printf("\nQuery for %s\n", filename)
-	fmt.Printf("Write to %s\n", fullfilename)
+	log.Printf("Query for %s\n", filename)
+	log.Printf("Write to %s\n", fullfilename)
 
 	err := os.MkdirAll(basePath(fullfilename), os.ModeDir|os.ModePerm)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
-		fmt.Printf("MkdirAll error %v\n", err)
+		log.Printf("MkdirAll error %v\n", err)
 		return err
 	}
 
 	file, err := os.Create(fullfilename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
-		fmt.Printf("Open error %v\n", err)
+		log.Printf("Open error %v\n", err)
 		return err
 	}
 
@@ -195,10 +214,10 @@ func writeHandler(filename string, wt io.WriterTo) error {
 	n, err := wt.WriteTo(mw)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
-		fmt.Printf("Write error %v\n", err)
+		log.Printf("Write error %v\n", err)
 		return err
 	}
-	fmt.Printf("%d bytes received\n", n)
+	log.Printf("%d bytes received\n", n)
 
 	return proceedCommand(strings.ToLower(baseName(filename)), buf)
 }
@@ -209,8 +228,9 @@ func main() {
 
 	fmt.Printf("Version is %s\n", Version)
 	if len(os.Args) < 3 {
-		log.Fatal("tftpx, incorrect number of arguments.\nUsage: " + os.Args[0] + " [ip]:port data_local_path") //:69
-		log.Fatal("Example: %s: " + os.Args[0] + " :69 /tmp")                                                   //:69
+		fmt.Printf("tftpx, incorrect number of arguments.\nUsage: " + os.Args[0] + " [ip]:port data_local_path") //:69
+		fmt.Printf("Example: %s: " + os.Args[0] + " :69 /tmp")                                                   //:69
+		os.Exit(1)
 	}
 
 	fmt.Printf("Listening on %s\n", os.Args[1])

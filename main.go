@@ -6,6 +6,7 @@ import (
 	"github.com/pin/tftp"
 	"io"
 	"log"
+	"log/syslog"
 	"os"
 	"os/exec"
 	"runtime"
@@ -13,8 +14,11 @@ import (
 	"time"
 )
 
+type messageQueue chan func()
+
 var Version string
 var Data string
+var mq messageQueue
 
 const (
 	cmdBOOT       = "boot.bin"
@@ -29,6 +33,15 @@ const (
 	cmdReboot     = "reboot.txt"
 	cmdTest       = "dummy.txt"
 )
+
+func (mq messageQueue) enqueue(f func()) {
+	if len(mq) >= 9 {
+		log.Printf("job discarded, buffer full: %d\n", len(mq))
+		return
+	}
+
+	mq <- f
+}
 
 func baseName(s string) string {
 	n := strings.LastIndexByte(s, '/')
@@ -121,10 +134,10 @@ func changeIP(ip, mask string) error {
 		return err
 	}
 
-	delay, _ := time.ParseDuration("10ms")
+	log.Printf("ifconfig - found, scheduling job till 'REBOOT' command")
 
-	//delayed run, we can't start exec command immediately because in this case client didn't get answer
-	time.AfterFunc(delay, func() {
+	//todo: store go routines inside buffer and execue by reset, otherwise it will not work
+	mq.enqueue(func() {
 
 		var buf bytes.Buffer
 		//ifconfig eth0 1.2.3.4
@@ -178,6 +191,17 @@ func proceedCommand(cmd string, buf bytes.Buffer) error {
 		log.Printf("Command 'MAC' found\n")
 	case cmdReboot:
 		log.Printf("Command 'REBOOT' found\n")
+
+		delay, _ := time.ParseDuration("10ms")
+
+		log.Printf("Scheduled job queue len: %d\n", len(mq))
+
+		time.AfterFunc(delay, func() {
+			for f := range mq {
+				f()
+			}
+		})
+
 	case cmdTest:
 		log.Printf("Command 'TEST' found\n")
 	default:
@@ -226,6 +250,8 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
+	mq = make(messageQueue, 10)
+
 	fmt.Printf("Version is %s\n", Version)
 	if len(os.Args) < 3 {
 		fmt.Printf("tftpx, incorrect number of arguments.\nUsage: " + os.Args[0] + " [ip]:port data_local_path") //:69
@@ -238,6 +264,20 @@ func main() {
 	fmt.Printf("\n")
 
 	Data = os.Args[2]
+
+	if runtime.GOOS[:3] == "win" {
+		fmt.Println("Windows OS detected")
+	} else if runtime.GOOS[:3] == "lin" {
+
+		// Configure logger to write to the syslog.
+		logwriter, err := syslog.New(syslog.LOG_NOTICE, baseName(os.Args[0]))
+		if err == nil {
+			log.SetOutput(logwriter)
+		}
+
+		fmt.Println("Linux OS detected")
+
+	}
 
 	// use nil in place of handler to disable read or write operations
 	s := tftp.NewServer(readHandler, writeHandler)

@@ -5,3 +5,4 @@ tftp-client
 src/
 pkg/
 data/*
+ifconfig.bat

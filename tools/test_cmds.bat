@@ -1,3 +1,4 @@
+cd ..
 tftp-client.exe localhost:69 cmds/BOOT.bin BOOT.bin
 tftp-client.exe localhost:69 cmds/ip.txt ip.txt
 tftp-client.exe localhost:69 cmds/stop.txt stop.txt

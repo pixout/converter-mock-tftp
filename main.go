@@ -19,6 +19,7 @@ type messageQueue chan func()
 var Version string
 var Data string
 var mq messageQueue
+var server *tftp.Server
 
 const (
 	cmdBOOT       = "boot.bin"
@@ -145,13 +146,13 @@ func changeIP(ip, mask string) error {
 		cmd.Stdout = &buf
 		cmd.Stderr = &buf
 
+		defer server.Shutdown()
+
 		err := cmd.Run()
 		if err != nil {
 			log.Printf("Unsuccessfully! IP not changed")
 			return
 		}
-
-		log.Printf("Successfully: %s", buf.String())
 	})
 
 	return nil
@@ -192,7 +193,7 @@ func proceedCommand(cmd string, buf bytes.Buffer) error {
 	case cmdReboot:
 		log.Printf("Command 'REBOOT' found\n")
 
-		delay, _ := time.ParseDuration("10ms")
+		delay, _ := time.ParseDuration("500ms")
 
 		log.Printf("Scheduled job queue len: %d\n", len(mq))
 
@@ -280,9 +281,8 @@ func main() {
 	}
 
 	// use nil in place of handler to disable read or write operations
-	s := tftp.NewServer(readHandler, writeHandler)
-	s.SetTimeout(5 * time.Second)       // optional
-	err := s.ListenAndServe(os.Args[1]) // blocks until s.Shutdown() is called
+	server = tftp.NewServer(readHandler, writeHandler)
+	err := server.ListenAndServe(os.Args[1]) // blocks until server.Shutdown() is called
 	if err != nil {
 		fmt.Fprintf(os.Stdout, "server: %v\n", err)
 		os.Exit(1)
